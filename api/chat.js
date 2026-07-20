@@ -2,9 +2,9 @@
 // Endpoint: POST /api/chat
 // Body: { pregunta: string, resumen: { diasTotales, diasTranscurridos, filas: [...] } }
 //
-// Guarda la llave de Anthropic en el servidor (variable de entorno ANTHROPIC_API_KEY
-// en el panel de Vercel: Project Settings -> Environment Variables). El navegador
-// del usuario nunca ve esa llave.
+// Usa la API gratuita de Google Gemini (Google AI Studio). Guarda la llave en el
+// servidor (variable de entorno GEMINI_API_KEY en Vercel) — el navegador del
+// usuario nunca la ve. No requiere tarjeta de crédito.
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -12,9 +12,9 @@ export default async function handler(req, res) {
     return;
   }
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    res.status(500).json({ error: "Falta configurar ANTHROPIC_API_KEY en Vercel" });
+    res.status(500).json({ error: "Falta configurar GEMINI_API_KEY en Vercel" });
     return;
   }
 
@@ -34,36 +34,33 @@ ${JSON.stringify(resumen.filas)}
 Responde en español, de forma breve y directa, como lo haría un gerente comercial hablando con otro. Si preguntan por alguien o alguna marca que no aparece en los datos, dilo claramente en vez de inventar.`;
 
   try {
-    const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01"
-      },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-6",
-        max_tokens: 700,
-        system: systemPrompt,
-        messages: [{ role: "user", content: String(pregunta) }]
-      })
-    });
+    const modelo = "gemini-2.0-flash";
+    const geminiRes = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${modelo}:generateContent?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: systemPrompt }] },
+          contents: [{ role: "user", parts: [{ text: String(pregunta) }] }],
+          generationConfig: { maxOutputTokens: 700 }
+        })
+      }
+    );
 
-    if (!anthropicRes.ok) {
-      const errText = await anthropicRes.text();
-      res.status(502).json({ error: "Anthropic API error: " + errText });
+    if (!geminiRes.ok) {
+      const errText = await geminiRes.text();
+      res.status(502).json({ error: "Gemini API error: " + errText });
       return;
     }
 
-    const data = await anthropicRes.json();
-    const respuesta = (data.content || [])
-      .filter((b) => b.type === "text")
-      .map((b) => b.text)
-      .join("\n")
-      .trim();
+    const data = await geminiRes.json();
+    const respuesta =
+      data.candidates?.[0]?.content?.parts?.map((p) => p.text).join("\n").trim() ||
+      "No obtuve una respuesta clara.";
 
-    res.status(200).json({ respuesta: respuesta || "No obtuve una respuesta clara." });
+    res.status(200).json({ respuesta });
   } catch (err) {
-    res.status(500).json({ error: "Error llamando a Anthropic: " + err.message });
+    res.status(500).json({ error: "Error llamando a Gemini: " + err.message });
   }
 }
