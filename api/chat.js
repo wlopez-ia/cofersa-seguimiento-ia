@@ -53,7 +53,18 @@ Responde en español, de forma breve y directa, como lo haría un gerente comerc
 
     if (!geminiRes.ok) {
       const errText = await geminiRes.text();
-      res.status(502).json({ error: "Gemini API error: " + errText });
+      if (geminiRes.status === 429) {
+        res.status(200).json({
+          respuesta: "Se alcanzó el límite gratuito de preguntas por minuto. Espera unos 30-60 segundos y vuelve a intentar."
+        });
+        return;
+      }
+      let mensaje = "No se pudo obtener respuesta de Gemini.";
+      try {
+        const parsed = JSON.parse(errText);
+        mensaje = parsed.error?.message || mensaje;
+      } catch (_) {}
+      res.status(200).json({ respuesta: "Hubo un problema: " + mensaje });
       return;
     }
 
