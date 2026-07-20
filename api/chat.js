@@ -28,10 +28,13 @@ export default async function handler(req, res) {
 
 Contexto: hoy es el día hábil ${resumen.diasTranscurridos} de ${resumen.diasTotales} del mes. "Meta" es la meta mensual completa. "Venta" es lo vendido hasta hoy. "Semáforo" indica el ritmo: verde (>=95% del ritmo esperado a la fecha), ambar (80-95%), rojo (<80%), sin-meta (vende pero no tiene meta asignada en el forecast). "Proyección" es una proyección lineal de cierre de mes basada en el ritmo actual.
 
-Datos (formato [vendedor, marca, meta, venta, semáforo, proyección]):
-${JSON.stringify(resumen.filas)}
+Resumen por vendedor (formato [vendedor, meta, venta, semáforo, proyección]):
+${JSON.stringify(resumen.resumenVendedores)}
 
-Responde en español, de forma breve y directa, como lo haría un gerente comercial hablando con otro. Si preguntan por alguien o alguna marca que no aparece en los datos, dilo claramente en vez de inventar.`;
+Detalle por marca de los vendedores relevantes a esta pregunta (formato [vendedor, marca, meta, venta, semáforo, proyección]) — si la pregunta es sobre alguien que no aparece aquí ni en el resumen de arriba, dilo claramente en vez de inventar:
+${JSON.stringify(resumen.detalleMarcas)}
+
+Responde en español, de forma breve y directa, como lo haría un gerente comercial hablando con otro.`;
 
   try {
     const modelo = "gemini-2.0-flash";
