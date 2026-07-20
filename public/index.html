@@ -149,6 +149,10 @@
     <div class="alertas" id="alertasBox"></div>
 
     <div class="toolbar">
+      <span class="tag">Equipo</span>
+      <select id="filtroSupervisor">
+        <option value="">Todos los equipos</option>
+      </select>
       <span class="tag">Buscar</span>
       <input id="buscar" type="text" placeholder="Nombre del vendedor o marca…">
       <select id="filtroSemaforo">
@@ -218,11 +222,12 @@ async function fetchRange(range){
 async function cargar(){
   const estado = document.getElementById("estado");
   try{
-    const [diasHabiles, dataRows, marcasVendedorRows, zonasVendedorRows] = await Promise.all([
+    const [diasHabiles, dataRows, marcasVendedorRows, zonasVendedorRows, supervisionRows] = await Promise.all([
       fetchRange("Dias Habiles!A1:B2"),
       fetchRange("DATA!A10:K"),
       fetchRange("MARCAS VENDEDOR!A2:C"),
-      fetchRange("ZONAS VENDEDOR!A2:D")
+      fetchRange("ZONAS VENDEDOR!A2:D"),
+      fetchRange("SUPERVISIÓN!A2:B")
     ]);
 
     const diasTotales = Number(diasHabiles[0][1]);
@@ -300,7 +305,14 @@ async function cargar(){
       sinMeta.push(key);
     });
 
-    renderizar(vendedores, diasTotales, diasTranscurridos, fraccion);
+    // Vendedor real -> supervisor a cargo (para el filtro de equipos)
+    const vendedorSupervisor = new Map();
+    supervisionRows.forEach(r=>{
+      if(!r || !r[0]) return;
+      vendedorSupervisor.set(stripPrefijo(r[0]), String(r[1]||"").trim());
+    });
+
+    renderizar(vendedores, diasTotales, diasTranscurridos, fraccion, vendedorSupervisor);
     document.getElementById("statusBox").innerHTML =
       `<b>Día hábil ${diasTranscurridos} de ${diasTotales}</b>Actualizado ahora`;
     estado.style.display="none";
@@ -324,8 +336,39 @@ function semaforoDe(venta, meta, fraccion){
 
 let ESTADO_GLOBAL = null;
 
-function renderizar(vendedores, diasTotales, diasTranscurridos, fraccion){
-  ESTADO_GLOBAL = {vendedores, diasTotales, diasTranscurridos, fraccion};
+function renderizar(vendedoresTodos, diasTotales, diasTranscurridos, fraccion, vendedorSupervisor){
+  ESTADO_GLOBAL = {vendedoresTodos, diasTotales, diasTranscurridos, fraccion, vendedorSupervisor};
+
+  // Llenar el selector de equipos con los supervisores encontrados (una sola vez)
+  const selectSup = document.getElementById("filtroSupervisor");
+  if(selectSup.options.length<=1){
+    const supervisores = [...new Set(vendedorSupervisor.values())].filter(Boolean).sort();
+    supervisores.forEach(s=>{
+      const opt = document.createElement("option");
+      opt.value = s; opt.textContent = "Equipo de " + s;
+      selectSup.appendChild(opt);
+    });
+    selectSup.addEventListener("change", actualizarVista);
+  }
+
+  actualizarVista();
+}
+
+function vendedoresDelEquipoSeleccionado(){
+  const {vendedoresTodos, vendedorSupervisor} = ESTADO_GLOBAL;
+  const supSeleccionado = document.getElementById("filtroSupervisor").value;
+  if(!supSeleccionado) return vendedoresTodos;
+  const filtrado = new Map();
+  vendedoresTodos.forEach((v, nombre)=>{
+    if(vendedorSupervisor.get(nombre) === supSeleccionado) filtrado.set(nombre, v);
+  });
+  return filtrado;
+}
+
+function actualizarVista(){
+  const {diasTotales, diasTranscurridos, fraccion} = ESTADO_GLOBAL;
+  const vendedores = vendedoresDelEquipoSeleccionado();
+  ESTADO_GLOBAL.vendedores = vendedores; // subset activo, usado por tabla/alertas/asistente
 
   let metaTotal=0, ventaTotal=0, proyeccionTotal=0;
   let rojos=0, amb=0, verdes=0;
@@ -339,7 +382,7 @@ function renderizar(vendedores, diasTotales, diasTranscurridos, fraccion){
 
   document.getElementById("cards").innerHTML = `
     <div class="card"><div class="label">Meta total Julio</div><div class="value">${fmt(metaTotal)}</div><div class="foot">${vendedores.size} vendedores con meta por marca</div></div>
-    <div class="card ${ventaTotal>=metaTotal*fraccion?'ok':'warn'}"><div class="label">Venta acumulada</div><div class="value">${fmt(ventaTotal)}</div><div class="foot">${pct(fraccion)} del mes transcurrido (día ${ESTADO_GLOBAL.diasTranscurridos}/${ESTADO_GLOBAL.diasTotales})</div></div>
+    <div class="card ${ventaTotal>=metaTotal*fraccion?'ok':'warn'}"><div class="label">Venta acumulada</div><div class="value">${fmt(ventaTotal)}</div><div class="foot">${pct(fraccion)} del mes transcurrido (día ${diasTranscurridos}/${diasTotales})</div></div>
     <div class="card"><div class="label">Proyección de cierre</div><div class="value">${fmt(proyeccionTotal)}</div><div class="foot">${proyeccionTotal>=metaTotal?'Por encima de la meta':'Por debajo de la meta'}</div></div>
     <div class="card"><div class="label">Vendedores en rojo</div><div class="value" style="color:var(--rojo)">${rojos}</div><div class="foot">${verdes} en verde · ${amb} en ámbar</div></div>
   `;
