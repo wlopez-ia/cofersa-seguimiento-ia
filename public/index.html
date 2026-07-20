@@ -387,12 +387,18 @@ function resumenParaIA(pregunta){
   const {vendedores, diasTotales, diasTranscurridos, fraccion} = ESTADO_GLOBAL;
   const preguntaUpper = (pregunta||"").toUpperCase();
 
+  // Los modelos de lenguaje no son confiables reescribiendo números grandes de
+  // memoria (a veces "inventan" un punto decimal). Para evitarlo, se formatean
+  // aquí con separador de miles y se le pide al modelo que los copie tal cual,
+  // en vez de dejarlo reescribir el número él mismo.
+  const fnum = (n) => (n===null || n===undefined) ? null : Math.round(n).toLocaleString("es-CR");
+
   const resumenVendedores = [];
   const nombresMencionados = [];
   vendedores.forEach((v, nombre)=>{
     const sem = semaforoDe(v.ventaTotal, v.metaTotal, fraccion) || "sin-meta";
     const proy = diasTranscurridos>0 ? Math.round(v.ventaTotal/diasTranscurridos*diasTotales) : 0;
-    resumenVendedores.push([nombre, Math.round(v.metaTotal), Math.round(v.ventaTotal), sem, proy]);
+    resumenVendedores.push([nombre, fnum(v.metaTotal), fnum(v.ventaTotal), sem, fnum(proy)]);
     const partes = nombre.split(" ").filter(p=>p.length>3);
     if(partes.some(p=>preguntaUpper.includes(p))) nombresMencionados.push(nombre);
   });
@@ -410,7 +416,7 @@ function resumenParaIA(pregunta){
       marcas.forEach(m=>{
         const sem = semaforoDe(m.venta, m.meta, fraccion) || "sin-meta";
         const proy = diasTranscurridos>0 ? Math.round(m.venta/diasTranscurridos*diasTotales) : 0;
-        detalleMarcas.push([nombre, m.marca, m.meta, Math.round(m.venta), sem, proy]);
+        detalleMarcas.push([nombre, m.marca, fnum(m.meta), fnum(m.venta), sem, fnum(proy)]);
       });
     });
   } else {
@@ -426,7 +432,7 @@ function resumenParaIA(pregunta){
         const sem = semaforoDe(m.venta, m.meta, fraccion);
         if(sem!=="rojo") return;
         const proy = diasTranscurridos>0 ? Math.round(m.venta/diasTranscurridos*diasTotales) : 0;
-        detalleMarcas.push([nombre, m.marca, m.meta, Math.round(m.venta), sem, proy]);
+        detalleMarcas.push([nombre, m.marca, fnum(m.meta), fnum(m.venta), sem, fnum(proy)]);
       });
     });
   }
