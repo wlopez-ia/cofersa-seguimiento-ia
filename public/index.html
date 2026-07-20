@@ -381,19 +381,45 @@ function pintarAlertas(){
 }
 
 // ---------- Asistente ----------
-function resumenParaIA(){
-  // Compacta solo lo necesario para responder preguntas: nombre, marca, meta, venta, semáforo, proyección
+function resumenParaIA(pregunta){
+  // Para no exceder la cuota gratuita de Gemini, no mandamos las 2700+ filas
+  // completas en cada pregunta. Siempre mandamos un resumen corto por vendedor,
+  // y solo agregamos el detalle por marca de los vendedores que la pregunta
+  // realmente menciona (o, si no menciona a nadie, de los que están en rojo).
   const {vendedores, diasTotales, diasTranscurridos, fraccion} = ESTADO_GLOBAL;
-  const filas = [];
+  const preguntaUpper = (pregunta||"").toUpperCase();
+
+  const resumenVendedores = [];
+  const nombresMencionados = [];
   vendedores.forEach((v, nombre)=>{
+    const sem = semaforoDe(v.ventaTotal, v.metaTotal, fraccion) || "sin-meta";
+    const proy = diasTranscurridos>0 ? Math.round(v.ventaTotal/diasTranscurridos*diasTotales) : 0;
+    resumenVendedores.push([nombre, Math.round(v.metaTotal), Math.round(v.ventaTotal), sem, proy]);
+    // ¿la pregunta menciona a este vendedor (por nombre o apellido)?
+    const partes = nombre.split(" ").filter(p=>p.length>3);
+    if(partes.some(p=>preguntaUpper.includes(p))) nombresMencionados.push(nombre);
+  });
+
+  // Si no mencionó a nadie en particular, usamos como contexto extra a los
+  // vendedores en rojo (para preguntas tipo "¿quién está más atrasado?").
+  let objetivos = nombresMencionados;
+  if(objetivos.length===0){
+    objetivos = resumenVendedores.filter(r=>r[3]==="rojo").map(r=>r[0]).slice(0,8);
+  }
+
+  const detalleMarcas = [];
+  objetivos.forEach(nombre=>{
+    const v = vendedores.get(nombre);
+    if(!v) return;
     v.marcas.forEach(m=>{
       if(m.meta===null && m.venta<=0) return;
       const sem = semaforoDe(m.venta, m.meta, fraccion) || "sin-meta";
       const proy = diasTranscurridos>0 ? Math.round(m.venta/diasTranscurridos*diasTotales) : 0;
-      filas.push([nombre, m.marca, m.meta, Math.round(m.venta), sem, proy]);
+      detalleMarcas.push([nombre, m.marca, m.meta, Math.round(m.venta), sem, proy]);
     });
   });
-  return {diasTotales, diasTranscurridos, filas};
+
+  return {diasTotales, diasTranscurridos, resumenVendedores, detalleMarcas};
 }
 
 function agregarMensaje(texto, clase){
@@ -412,7 +438,7 @@ async function preguntar(texto){
   const loading = agregarMensaje("Revisando las cifras…", "bot loading");
   document.getElementById("chatBtn").disabled = true;
 
-  const resumen = resumenParaIA();
+  const resumen = resumenParaIA(texto);
 
   try{
     const res = await fetch("/api/chat", {
