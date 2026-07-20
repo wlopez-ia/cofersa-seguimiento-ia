@@ -1,9 +1,9 @@
 // api/chat.js
 // Endpoint: POST /api/chat
-// Body: { pregunta: string, resumen: { diasTotales, diasTranscurridos, filas: [...] } }
+// Body: { pregunta: string, resumen: { diasTotales, diasTranscurridos, resumenVendedores, detalleMarcas } }
 //
-// Usa la API gratuita de Google Gemini (Google AI Studio). Guarda la llave en el
-// servidor (variable de entorno GEMINI_API_KEY en Vercel) — el navegador del
+// Usa la API gratuita de Groq (console.groq.com). Guarda la llave en el
+// servidor (variable de entorno GROQ_API_KEY en Vercel) — el navegador del
 // usuario nunca la ve. No requiere tarjeta de crédito.
 
 export default async function handler(req, res) {
@@ -12,9 +12,9 @@ export default async function handler(req, res) {
     return;
   }
 
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) {
-    res.status(500).json({ error: "Falta configurar GEMINI_API_KEY en Vercel" });
+    res.status(500).json({ error: "Falta configurar GROQ_API_KEY en Vercel" });
     return;
   }
 
@@ -37,29 +37,31 @@ ${JSON.stringify(resumen.detalleMarcas)}
 Responde en español, de forma breve y directa, como lo haría un gerente comercial hablando con otro.`;
 
   try {
-    const modelo = "gemini-2.0-flash";
-    const geminiRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${modelo}:generateContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: systemPrompt }] },
-          contents: [{ role: "user", parts: [{ text: String(pregunta) }] }],
-          generationConfig: { maxOutputTokens: 700 }
-        })
-      }
-    );
+    const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: "llama-3.1-8b-instant",
+        max_tokens: 700,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: String(pregunta) }
+        ]
+      })
+    });
 
-    if (!geminiRes.ok) {
-      const errText = await geminiRes.text();
-      if (geminiRes.status === 429) {
+    if (!groqRes.ok) {
+      const errText = await groqRes.text();
+      if (groqRes.status === 429) {
         res.status(200).json({
           respuesta: "Se alcanzó el límite gratuito de preguntas por minuto. Espera unos 30-60 segundos y vuelve a intentar."
         });
         return;
       }
-      let mensaje = "No se pudo obtener respuesta de Gemini.";
+      let mensaje = "No se pudo obtener respuesta del asistente.";
       try {
         const parsed = JSON.parse(errText);
         mensaje = parsed.error?.message || mensaje;
@@ -68,13 +70,10 @@ Responde en español, de forma breve y directa, como lo haría un gerente comerc
       return;
     }
 
-    const data = await geminiRes.json();
-    const respuesta =
-      data.candidates?.[0]?.content?.parts?.map((p) => p.text).join("\n").trim() ||
-      "No obtuve una respuesta clara.";
-
+    const data = await groqRes.json();
+    const respuesta = data.choices?.[0]?.message?.content?.trim() || "No obtuve una respuesta clara.";
     res.status(200).json({ respuesta });
   } catch (err) {
-    res.status(500).json({ error: "Error llamando a Gemini: " + err.message });
+    res.status(500).json({ error: "Error llamando a Groq: " + err.message });
   }
 }
