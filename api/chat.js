@@ -28,6 +28,8 @@ export default async function handler(req, res) {
 
 Contexto: hoy es el día hábil ${resumen.diasTranscurridos} de ${resumen.diasTotales} del mes. "Meta" es la meta mensual completa. "Venta" es lo vendido hasta hoy. "Semáforo" indica el ritmo: verde (>=95% del ritmo esperado a la fecha), ambar (80-95%), rojo (<80%), sin-meta (vende pero no tiene meta asignada en el forecast). "Proyección" es una proyección lineal de cierre de mes basada en el ritmo actual.
 
+IMPORTANTE sobre las cifras: ya vienen formateadas con espacio como separador de miles (ej. "61 999 769"). Cópialas EXACTAMENTE como aparecen en los datos, tal cual, dígito por dígito. No las vuelvas a escribir de memoria, no les quites los espacios, no les agregues puntos ni comas.
+
 Resumen por vendedor (formato [vendedor, meta, venta, semáforo, proyección]):
 ${JSON.stringify(resumen.resumenVendedores)}
 
