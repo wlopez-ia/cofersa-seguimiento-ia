@@ -48,6 +48,13 @@
   .dot{width:7px;height:7px;border-radius:50%;background:#48d597;display:inline-block;}
   .status{font-size:12px;color:#cfe3ea;text-align:right;}
   .status b{color:white;display:block;font-size:13px;}
+  .btn-actualizar{
+    background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);color:white;
+    border-radius:9px;padding:8px 14px;font-size:13px;font-weight:700;cursor:pointer;
+    font-family:inherit;white-space:nowrap;transition:background .15s;
+  }
+  .btn-actualizar:hover{background:rgba(255,255,255,.22);}
+  .btn-actualizar:disabled{opacity:.5;cursor:default;}
 
   .toolbar{
     display:flex;gap:10px;flex-wrap:wrap;align-items:center;
@@ -99,7 +106,37 @@
   #estado{padding:40px;text-align:center;color:var(--texto-sub);font-size:14px;}
   .err{color:var(--rojo);background:var(--rojo-bg);padding:12px 16px;border-radius:10px;font-size:13px;margin-bottom:14px;}
   ::selection{background:#bfe0ee;}
-  @media (max-width:900px){.cards{grid-template-columns:repeat(2,1fr);}}
+
+  .table-scroll{overflow-x:auto;border-radius:14px;-webkit-overflow-scrolling:touch;}
+  .table-scroll table{min-width:640px;}
+
+  @media (max-width:900px){
+    .cards{grid-template-columns:repeat(2,1fr);}
+  }
+
+  @media (max-width:640px){
+    .app{padding:12px 12px 40px;}
+    header.top{padding:16px 16px;border-radius:12px;flex-direction:column;align-items:flex-start;}
+    header.top > div:last-child{width:100%;display:flex;justify-content:space-between;align-items:center;}
+    header.top h1{font-size:16px;}
+    .status{text-align:left;}
+    .cards{grid-template-columns:1fr 1fr;gap:8px;}
+    .card{padding:12px 13px;}
+    .card .value{font-size:19px;}
+    .toolbar{flex-direction:column;align-items:stretch;padding:12px;}
+    .toolbar select, .toolbar input{width:100%;}
+    .toolbar .tag{margin-top:4px;}
+    .legend{margin-left:0;flex-wrap:wrap;}
+    .alertas{padding:14px;}
+    .alerta-item{flex-direction:column;align-items:flex-start;gap:2px;}
+    thead th{font-size:10px;padding:10px 10px;}
+    tbody tr.vend td{padding:10px 10px;font-size:12.5px;}
+    tbody tr.marca td{padding:7px 10px 7px 22px;font-size:12px;}
+    .bar-wrap{width:44px;}
+    .asistente{padding:14px;}
+    .chat-row{flex-direction:column;}
+    .chat-row button{padding:10px;}
+  }
 
   /* Alertas */
   .alertas{background:var(--panel);border:1px solid var(--linea);border-radius:14px;padding:16px 18px;margin-bottom:16px;}
@@ -138,7 +175,10 @@
       <h1>Cumplimiento por Marca — Julio 2026</h1>
       <div class="sub"><span class="dot"></span> Fuente: hoja de venta diaria (Cofersa) + metas Forecast Q3 2026</div>
     </div>
-    <div class="status" id="statusBox">Cargando…</div>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <button id="btnActualizar" class="btn-actualizar">↻ Actualizar</button>
+      <div class="status" id="statusBox">Cargando…</div>
+    </div>
   </header>
 
   <div id="estado">Trayendo datos en vivo de la hoja de venta y calculando cruces con las metas por marca…</div>
@@ -152,6 +192,10 @@
       <span class="tag">Equipo</span>
       <select id="filtroSupervisor">
         <option value="">Todos los equipos</option>
+      </select>
+      <span class="tag">Vendedor</span>
+      <select id="filtroVendedor">
+        <option value="">Todos los vendedores</option>
       </select>
       <span class="tag">Buscar</span>
       <input id="buscar" type="text" placeholder="Nombre del vendedor o marca…">
@@ -168,6 +212,7 @@
       </div>
     </div>
 
+    <div class="table-scroll">
     <table>
       <thead>
         <tr>
@@ -181,6 +226,7 @@
       </thead>
       <tbody id="tbody"></tbody>
     </table>
+    </div>
 
     <div class="asistente">
       <h2>Pregúntale a los datos</h2>
@@ -319,7 +365,8 @@ async function cargar(){
     document.getElementById("contenido").style.display="block";
 
   }catch(err){
-    estado.innerHTML = `<div class="err">No se pudo cargar la hoja de datos: ${err.message}. Verifica tu conexión o que la hoja siga siendo pública.</div>`;
+    estado.style.display="block";
+    estado.innerHTML = `<div class="err">No se pudo actualizar: ${err.message}. Verifica tu conexión o que la hoja siga siendo pública. Los datos que ves abajo son de la última carga exitosa.</div>`;
   }
 }
 
@@ -348,19 +395,44 @@ function renderizar(vendedoresTodos, diasTotales, diasTranscurridos, fraccion, v
       opt.value = s; opt.textContent = "Equipo de " + s;
       selectSup.appendChild(opt);
     });
-    selectSup.addEventListener("change", actualizarVista);
+    selectSup.addEventListener("change", ()=>{
+      poblarFiltroVendedor();
+      actualizarVista();
+    });
+    document.getElementById("filtroVendedor").addEventListener("change", actualizarVista);
+    poblarFiltroVendedor();
   }
 
   actualizarVista();
 }
 
+function poblarFiltroVendedor(){
+  const {vendedoresTodos, vendedorSupervisor} = ESTADO_GLOBAL;
+  const supSeleccionado = document.getElementById("filtroSupervisor").value;
+  const selectVend = document.getElementById("filtroVendedor");
+  const anterior = selectVend.value;
+
+  const nombres = [...vendedoresTodos.keys()]
+    .filter(nombre => !supSeleccionado || vendedorSupervisor.get(nombre) === supSeleccionado)
+    .sort();
+
+  selectVend.innerHTML = '<option value="">Todos los vendedores</option>' +
+    nombres.map(n=>`<option value="${n}">${n}</option>`).join("");
+
+  // si el vendedor que estaba elegido sigue en la lista (mismo equipo), lo mantenemos
+  if(nombres.includes(anterior)) selectVend.value = anterior;
+}
+
 function vendedoresDelEquipoSeleccionado(){
   const {vendedoresTodos, vendedorSupervisor} = ESTADO_GLOBAL;
   const supSeleccionado = document.getElementById("filtroSupervisor").value;
-  if(!supSeleccionado) return vendedoresTodos;
+  const vendSeleccionado = document.getElementById("filtroVendedor").value;
+
   const filtrado = new Map();
   vendedoresTodos.forEach((v, nombre)=>{
-    if(vendedorSupervisor.get(nombre) === supSeleccionado) filtrado.set(nombre, v);
+    if(supSeleccionado && vendedorSupervisor.get(nombre) !== supSeleccionado) return;
+    if(vendSeleccionado && nombre !== vendSeleccionado) return;
+    filtrado.set(nombre, v);
   });
   return filtrado;
 }
@@ -608,6 +680,12 @@ function pintarTabla(){
       tbody.appendChild(tr);
     });
 
+    const expandirPorFiltro = !!(filtroTexto || filtroSem);
+    if(!expandirPorFiltro){
+      filasMarca.forEach(f=> f.style.display = "none");
+      trVend.classList.add("collapsed");
+    }
+
     trVend.addEventListener("click", ()=>{
       const oculto = filasMarca.length && filasMarca[0].style.display==="none";
       filasMarca.forEach(f=> f.style.display = oculto ? "" : "none");
@@ -626,6 +704,18 @@ function semaforoBadge(tipo, venta, meta, fraccion){
 
 document.getElementById("buscar").addEventListener("input", pintarTabla);
 document.getElementById("filtroSemaforo").addEventListener("change", pintarTabla);
+
+document.getElementById("btnActualizar").addEventListener("click", async ()=>{
+  const btn = document.getElementById("btnActualizar");
+  btn.disabled = true;
+  btn.textContent = "Actualizando…";
+  try{
+    await cargar();
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "↻ Actualizar";
+  }
+});
 
 cargar();
 </script>
