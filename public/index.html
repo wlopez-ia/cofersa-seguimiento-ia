@@ -3,6 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <title>Cumplimiento por Marca — Cofersa</title>
+<link rel="icon" href="/icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="/icon-180.png">
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#123b52">
 <style>
   :root{
     --azul-950:#0b2b3d;
@@ -258,8 +262,10 @@ function stripPrefijo(nombre){
 }
 
 async function fetchRange(range){
-  const url = BASE + encodeURIComponent(range) + `?key=${API_KEY}&valueRenderOption=UNFORMATTED_VALUE`;
-  const res = await fetch(url);
+  // cache:"no-store" + un parámetro que cambia siempre evitan que el navegador
+  // reutilice una respuesta vieja guardada en caché en vez de pedir los datos actuales.
+  const url = BASE + encodeURIComponent(range) + `?key=${API_KEY}&valueRenderOption=UNFORMATTED_VALUE&_=${Date.now()}`;
+  const res = await fetch(url, {cache: "no-store"});
   if(!res.ok) throw new Error("No se pudo leer " + range + " (" + res.status + ")");
   const json = await res.json();
   return json.values || [];
